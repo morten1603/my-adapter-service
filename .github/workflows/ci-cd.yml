@@ -1,0 +1,40 @@
+name: Build and Integration Test
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    # Spins up your COTS binary from Repo 1 as a sidecar container for integration testing!
+    services:
+      cots-service:
+        image: ghcr.io/${{ github.repository_owner }}/cots-dummy:v1.0.0
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Run Integration Test against COTS
+        run: |
+          pip install redis
+          python app.py  # Tests that your code talks to the COTS container
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build and push Adapter Image
+        run: |
+          IMAGE_NAME=ghcr.io/${{ github.repository_owner }}/my-adapter-service:${{ github.sha }}
+          docker build -t "$IMAGE_NAME" .
+          docker push "$IMAGE_NAME"
